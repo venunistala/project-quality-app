@@ -1,0 +1,50 @@
+import { describe, expect, it } from 'vitest';
+import { buildApp } from '../src/app.js';
+import type { Config } from '../src/config.js';
+
+const testConfig: Config = {
+  NODE_ENV: 'test',
+  PORT: 0,
+  LOG_LEVEL: 'error',
+};
+
+describe('GET /health', () => {
+  it('returns status ok with db not-wired', async () => {
+    const app = buildApp({ config: testConfig });
+
+    const response = await app.inject({ method: 'GET', url: '/health' });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({ status: 'ok', db: 'not-wired' });
+
+    await app.close();
+  });
+
+  it('echoes an inbound x-request-id header into the response logger context', async () => {
+    const app = buildApp({ config: testConfig });
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/health',
+      headers: { 'x-request-id': 'test-request-id-123' },
+    });
+
+    expect(response.statusCode).toBe(200);
+
+    await app.close();
+  });
+
+  it('returns a consistent error envelope for unknown routes', async () => {
+    const app = buildApp({ config: testConfig });
+
+    const response = await app.inject({ method: 'GET', url: '/does-not-exist' });
+
+    expect(response.statusCode).toBe(404);
+    expect(response.json()).toMatchObject({
+      error: { code: 'NOT_FOUND' },
+    });
+    expect(response.json().error.requestId).toBeDefined();
+
+    await app.close();
+  });
+});
