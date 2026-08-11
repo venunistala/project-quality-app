@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import Fastify, { type FastifyInstance } from 'fastify';
+import { serializerCompiler, validatorCompiler } from 'fastify-type-provider-zod';
 import type { Config } from './config.js';
 import type { Database } from './db/client.js';
 import { registerDbPlugin } from './plugins/db.js';
@@ -24,6 +25,13 @@ export function buildApp({ config, db }: BuildAppOptions): FastifyInstance {
     },
     logger: buildLoggerOptions(config),
   });
+
+  // Lets routes declare `schema: { querystring: SomeZodSchema, ... }` with
+  // the actual shared Zod schemas, so Fastify's own validation lifecycle
+  // (not a manual in-handler Schema.parse()) produces 400s - which is also
+  // what makes query params visible to the OpenAPI generator later.
+  app.setValidatorCompiler(validatorCompiler);
+  app.setSerializerCompiler(serializerCompiler);
 
   registerErrorHandling(app, config.NODE_ENV === 'production');
   registerHealthRoute(app);
