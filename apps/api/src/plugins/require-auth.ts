@@ -36,3 +36,13 @@ export function registerRequireAuthPlugin(app: FastifyInstance, db: Database): v
     request.user = row.user;
   });
 }
+
+// Narrows request.user for route handlers registered behind app.requireAuth
+// - throwing here signals a wiring bug (a route using this without the
+// preHandler), not a client-facing failure.
+export function requireUser(request: FastifyRequest): SessionUser {
+  if (!request.user) {
+    throw new Error('requireUser() called on a route without the requireAuth preHandler');
+  }
+  return request.user;
+}

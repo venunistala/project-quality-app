@@ -2,6 +2,7 @@ import { LoginRequestSchema, SessionUserSchema } from '@quality-lab/shared';
 import type { FastifyInstance } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { z } from 'zod';
+import { requireUser } from '../plugins/require-auth.js';
 import { createLoginDeps, createLogoutDeps, login, logout } from '../services/auth.service.js';
 import { SESSION_COOKIE_NAME } from '../plugins/cookies.js';
 
@@ -47,6 +48,6 @@ export function registerAuthRoutes(app: FastifyInstance, options: { isProduction
       preHandler: [app.requireAuth],
       schema: { response: { 200: SessionUserSchema } },
     },
-    async (request) => request.user,
+    async (request) => requireUser(request),
   );
 }
