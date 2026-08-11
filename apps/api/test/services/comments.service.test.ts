@@ -1,7 +1,12 @@
 import type { UserRole } from '@quality-lab/shared';
 import { describe, expect, it, vi } from 'vitest';
 import { NotFoundError } from '../../src/services/errors.js';
-import { listReleaseComments, type ListReleaseCommentsDeps } from '../../src/services/comments.service.js';
+import {
+  createComment,
+  listReleaseComments,
+  type CreateCommentDeps,
+  type ListReleaseCommentsDeps,
+} from '../../src/services/comments.service.js';
 
 interface FakeCommentRow {
   id: string;
@@ -81,5 +86,57 @@ describe('listReleaseComments', () => {
     await listReleaseComments(deps, 'release-1', { page: 3, limit: 10 });
 
     expect(findByReleaseId).toHaveBeenCalledWith('release-1', { offset: 20, limit: 10 });
+  });
+});
+
+describe('createComment', () => {
+  function baseDeps(overrides: Partial<CreateCommentDeps> = {}): CreateCommentDeps {
+    return {
+      releaseExists: vi.fn(),
+      insert: vi.fn(),
+      ...overrides,
+    };
+  }
+
+  const actor = { id: 'user-2', name: 'Liam Patel', role: 'engineer' as UserRole, email: 'liam@quality-lab.dev' };
+
+  it('rejects with unauthenticated when no actor, without checking the release', async () => {
+    const releaseExists = vi.fn();
+    const deps = baseDeps({ releaseExists });
+
+    const result = await createComment(deps, { releaseId: 'release-1', actor: undefined, body: { body: 'hi' } });
+
+    expect(result).toEqual({ ok: false, failure: { kind: 'unauthenticated' } });
+    expect(releaseExists).not.toHaveBeenCalled();
+  });
+
+  it('throws NotFoundError when the release does not exist', async () => {
+    const deps = baseDeps({ releaseExists: vi.fn().mockResolvedValue(false) });
+
+    await expect(
+      createComment(deps, { releaseId: 'missing', actor, body: { body: 'hi' } }),
+    ).rejects.toThrow(NotFoundError);
+  });
+
+  it('inserts the comment and returns it, for any release state - no canTransition check', async () => {
+    const insert = vi.fn().mockResolvedValue({
+      id: 'comment-1',
+      body: 'LGTM',
+      createdAt: new Date('2026-01-05T00:00:00.000Z'),
+    });
+    const deps = baseDeps({ releaseExists: vi.fn().mockResolvedValue(true), insert });
+
+    const result = await createComment(deps, { releaseId: 'release-1', actor, body: { body: 'LGTM' } });
+
+    expect(insert).toHaveBeenCalledWith({ releaseId: 'release-1', authorId: 'user-2', body: 'LGTM' });
+    expect(result).toEqual({
+      ok: true,
+      value: {
+        id: 'comment-1',
+        body: 'LGTM',
+        createdAt: '2026-01-05T00:00:00.000Z',
+        author: { id: 'user-2', name: 'Liam Patel', role: 'engineer' },
+      },
+    });
   });
 });
