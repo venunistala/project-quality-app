@@ -1,10 +1,11 @@
-import type { Comment, CommentListQuery } from '@quality-lab/shared';
+import type { Comment, CommentListQuery, CreateCommentRequest, SessionUser } from '@quality-lab/shared';
 import type { Database } from '../db/client.js';
 import * as commentsRepository from '../db/repositories/comments.repository.js';
 import type { OffsetPagination } from '../db/repositories/releases.repository.js';
 import * as releasesRepository from '../db/repositories/releases.repository.js';
 import { NotFoundError } from './errors.js';
 import { buildPaginationMeta } from './pagination.js';
+import type { WriteResult } from './write-result.js';
 
 type CommentRow = Awaited<ReturnType<typeof commentsRepository.findByReleaseId>>[number];
 
@@ -62,5 +63,49 @@ export async function listReleaseComments(
   return {
     data: rows.map(toComment),
     pagination: buildPaginationMeta(query.page, query.limit, total),
+  };
+}
+
+export interface CreateCommentDeps {
+  releaseExists: (releaseId: string) => ReturnType<typeof releasesRepository.existsById>;
+  insert: (row: commentsRepository.InsertCommentRow) => ReturnType<typeof commentsRepository.insert>;
+}
+
+export function createCreateCommentDeps(db: Database): CreateCommentDeps {
+  return {
+    releaseExists: (releaseId) => releasesRepository.existsById(db, releaseId),
+    insert: (row) => commentsRepository.insert(db, row),
+  };
+}
+
+// Any authenticated user, any release state - no canTransition/state check
+// at all, unlike releases/transitions writes.
+export async function createComment(
+  deps: CreateCommentDeps,
+  params: { releaseId: string; actor: SessionUser | undefined; body: CreateCommentRequest },
+): Promise<WriteResult<Comment>> {
+  if (!params.actor) {
+    return { ok: false, failure: { kind: 'unauthenticated' } };
+  }
+
+  const exists = await deps.releaseExists(params.releaseId);
+  if (!exists) {
+    throw new NotFoundError('release', params.releaseId);
+  }
+
+  const inserted = await deps.insert({
+    releaseId: params.releaseId,
+    authorId: params.actor.id,
+    body: params.body.body,
+  });
+
+  return {
+    ok: true,
+    value: {
+      id: inserted.id,
+      body: inserted.body,
+      createdAt: inserted.createdAt.toISOString(),
+      author: { id: params.actor.id, name: params.actor.name, role: params.actor.role },
+    },
   };
 }

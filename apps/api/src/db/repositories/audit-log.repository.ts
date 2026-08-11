@@ -1,4 +1,4 @@
-import type { Database } from '../client.js';
+import type { Executor } from '../client.js';
 import { auditLog } from '../schema/index.js';
 
 export interface InsertAuditLogRow {
@@ -10,6 +10,6 @@ export interface InsertAuditLogRow {
   requestId: string | null;
 }
 
-export async function insert(db: Database, row: InsertAuditLogRow): Promise<void> {
+export async function insert(db: Executor, row: InsertAuditLogRow): Promise<void> {
   await db.insert(auditLog).values(row);
 }

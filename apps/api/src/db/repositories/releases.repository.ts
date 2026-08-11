@@ -1,6 +1,6 @@
 import type { ReleaseStatus } from '@quality-lab/shared';
 import { and, asc, desc, eq, ilike, inArray, sql, type SQL } from 'drizzle-orm';
-import type { Database } from '../client.js';
+import type { Database, Executor } from '../client.js';
 import { releases } from '../schema/index.js';
 import { escapeLikePattern } from './escape-like-pattern.js';
 
@@ -102,7 +102,7 @@ export interface InsertReleaseRow {
   createdBy: string;
 }
 
-export async function insert(db: Database, row: InsertReleaseRow) {
+export async function insert(db: Executor, row: InsertReleaseRow) {
   const [inserted] = await db.insert(releases).values(row).returning();
   if (!inserted) {
     throw new Error('insert into releases returned no row');
@@ -110,7 +110,7 @@ export async function insert(db: Database, row: InsertReleaseRow) {
   return inserted;
 }
 
-export async function findCurrentVersion(db: Database, id: string): Promise<number | undefined> {
+export async function findCurrentVersion(db: Executor, id: string): Promise<number | undefined> {
   const [row] = await db.select({ version: releases.version }).from(releases).where(eq(releases.id, id));
   return row?.version;
 }
@@ -128,7 +128,7 @@ export interface ConditionalStatusUpdate {
  * Zero rows returned means the version didn't match (stale) - see
  * docs/adr/0013-optimistic-locking.md.
  */
-export async function conditionalUpdateStatus(db: Database, params: ConditionalStatusUpdate) {
+export async function conditionalUpdateStatus(db: Executor, params: ConditionalStatusUpdate) {
   const [row] = await db
     .update(releases)
     .set({ status: params.toStatus, version: sql`${releases.version} + 1`, updatedAt: new Date() })
