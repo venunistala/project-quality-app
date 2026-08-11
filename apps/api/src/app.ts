@@ -6,6 +6,7 @@ import type { Database } from './db/client.js';
 import { registerDbPlugin } from './plugins/db.js';
 import { registerErrorHandling } from './plugins/error-handler.js';
 import { buildLoggerOptions } from './plugins/logger.js';
+import { registerOpenApi } from './plugins/openapi.js';
 import { registerHealthRoute } from './routes/health.js';
 import { registerReleaseRoutes } from './routes/releases.routes.js';
 import { registerUserRoutes } from './routes/users.routes.js';
@@ -18,7 +19,7 @@ export interface BuildAppOptions {
   db?: Database;
 }
 
-export function buildApp({ config, db }: BuildAppOptions): FastifyInstance {
+export async function buildApp({ config, db }: BuildAppOptions): Promise<FastifyInstance> {
   const app = Fastify({
     requestIdHeader: 'x-request-id',
     genReqId: (req) => {
@@ -34,6 +35,11 @@ export function buildApp({ config, db }: BuildAppOptions): FastifyInstance {
   // what makes query params visible to the OpenAPI generator later.
   app.setValidatorCompiler(validatorCompiler);
   app.setSerializerCompiler(serializerCompiler);
+
+  // Must be awaited before any routes are registered - see the comment in
+  // registerOpenApi for why an un-awaited or too-late registration silently
+  // produces an empty paths object.
+  await registerOpenApi(app);
 
   // requestIdHeader only controls which INBOUND header Fastify reads a
   // request id from - it does not echo one back as a response header on

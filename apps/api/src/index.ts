@@ -18,7 +18,7 @@ try {
 }
 
 const { client, db } = createDbClient(config.DATABASE_URL);
-const app = buildApp({ config, db });
+const app = await buildApp({ config, db });
 
 async function shutdown(signal: string): Promise<void> {
   app.log.info({ signal }, 'shutting down');

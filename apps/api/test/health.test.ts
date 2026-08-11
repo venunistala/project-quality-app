@@ -11,7 +11,7 @@ const testConfig: Config = {
 
 describe('GET /health', () => {
   it('returns status ok with db not-wired', async () => {
-    const app = buildApp({ config: testConfig });
+    const app = await buildApp({ config: testConfig });
 
     const response = await app.inject({ method: 'GET', url: '/health' });
 
@@ -22,7 +22,7 @@ describe('GET /health', () => {
   });
 
   it('echoes an inbound x-request-id back as a response header', async () => {
-    const app = buildApp({ config: testConfig });
+    const app = await buildApp({ config: testConfig });
 
     const response = await app.inject({
       method: 'GET',
@@ -37,7 +37,7 @@ describe('GET /health', () => {
   });
 
   it('generates and returns an x-request-id when none is sent', async () => {
-    const app = buildApp({ config: testConfig });
+    const app = await buildApp({ config: testConfig });
 
     const response = await app.inject({ method: 'GET', url: '/health' });
 
@@ -48,7 +48,7 @@ describe('GET /health', () => {
   });
 
   it('returns a consistent error envelope for unknown routes', async () => {
-    const app = buildApp({ config: testConfig });
+    const app = await buildApp({ config: testConfig });
 
     const response = await app.inject({ method: 'GET', url: '/does-not-exist' });
 
