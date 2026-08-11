@@ -1,5 +1,6 @@
 import { relations } from 'drizzle-orm';
 import { comments } from './comments.js';
+import { credentials } from './credentials.js';
 import { releases } from './releases.js';
 import { transitions } from './transitions.js';
 import { users } from './users.js';
@@ -39,6 +40,17 @@ export const commentsRelations = relations(comments, ({ one }) => ({
   }),
 }));
 
-export const usersRelations = relations(users, ({ many }) => ({
+export const usersRelations = relations(users, ({ many, one }) => ({
   releasesCreated: many(releases),
+  credential: one(credentials, {
+    fields: [users.id],
+    references: [credentials.userId],
+  }),
+}));
+
+export const credentialsRelations = relations(credentials, ({ one }) => ({
+  user: one(users, {
+    fields: [credentials.userId],
+    references: [users.id],
+  }),
 }));

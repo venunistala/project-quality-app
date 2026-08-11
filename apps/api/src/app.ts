@@ -3,10 +3,13 @@ import Fastify, { type FastifyInstance } from 'fastify';
 import { serializerCompiler, validatorCompiler } from 'fastify-type-provider-zod';
 import type { Config } from './config.js';
 import type { Database } from './db/client.js';
+import { registerCookiesPlugin } from './plugins/cookies.js';
 import { registerDbPlugin } from './plugins/db.js';
 import { registerErrorHandling } from './plugins/error-handler.js';
 import { buildLoggerOptions } from './plugins/logger.js';
 import { registerOpenApi } from './plugins/openapi.js';
+import { registerRequireAuthPlugin } from './plugins/require-auth.js';
+import { registerAuthRoutes } from './routes/auth.routes.js';
 import { registerHealthRoute } from './routes/health.js';
 import { registerReleaseRoutes } from './routes/releases.routes.js';
 import { registerUserRoutes } from './routes/users.routes.js';
@@ -59,6 +62,9 @@ export async function buildApp({ config, db }: BuildAppOptions): Promise<Fastify
 
   if (db) {
     registerDbPlugin(app, db);
+    await registerCookiesPlugin(app);
+    registerRequireAuthPlugin(app, db);
+    registerAuthRoutes(app, { isProduction: config.NODE_ENV === 'production' });
     registerReleaseRoutes(app);
     registerUserRoutes(app);
   }

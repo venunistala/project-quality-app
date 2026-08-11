@@ -1,7 +1,12 @@
 import { sql } from 'drizzle-orm';
+import type { InferInsertModel } from 'drizzle-orm';
 import type { Database } from '../client.js';
-import { auditLog, comments, releases, transitions, users } from '../schema/index.js';
+import { auditLog, comments, credentials, releases, transitions, users } from '../schema/index.js';
+import { hashPassword } from '../../security/password.js';
 import { buildFixture, type Fixture } from './build-fixture.js';
+import { SEED_USER_PASSWORD } from './fixtures.js';
+
+type CredentialInsert = InferInsertModel<typeof credentials>;
 
 function chunk<T>(items: T[], size: number): T[][] {
   const chunks: T[][] = [];
@@ -11,22 +16,53 @@ function chunk<T>(items: T[], size: number): T[][] {
   return chunks;
 }
 
+// Defensive, not just a CLI-level check - assertNotProduction runs inside
+// seedDatabase itself so no caller (script, test, future admin endpoint)
+// can trigger a production seed by skipping db/seed.ts.
+function assertNotProduction(): void {
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error(
+      'Refusing to seed: NODE_ENV=production. Seeded users get a known dev-only password (see README).',
+    );
+  }
+}
+
 export interface SeedSummary {
   users: number;
   releases: number;
   transitions: number;
   comments: number;
   auditLog: number;
+  credentials: number;
 }
 
 async function seedDatabase(db: Database): Promise<{ fixture: Fixture; summary: SeedSummary }> {
+  assertNotProduction();
+
   const fixture = buildFixture();
+  // Hashed once and reused for every seeded user - it's the same known dev
+  // password for all of them, so there's no reason to pay argon2's cost 12
+  // times.
+  const passwordHash = await hashPassword(SEED_USER_PASSWORD);
+  const credentialRows: CredentialInsert[] = fixture.users.map((user) => {
+    // buildUsers() always sets an explicit id; InferInsertModel only marks
+    // it optional because the column has a DB-side default.
+    if (!user.id) {
+      throw new Error('seeded user is missing an id');
+    }
+    return { userId: user.id, passwordHash };
+  });
 
   await db.transaction(async (tx) => {
-    await tx.execute(sql`truncate table audit_log, comments, transitions, releases, users cascade`);
+    await tx.execute(
+      sql`truncate table audit_log, comments, transitions, releases, credentials, sessions, users cascade`,
+    );
 
     for (const batch of chunk(fixture.users, 500)) {
       await tx.insert(users).values(batch);
+    }
+    for (const batch of chunk(credentialRows, 500)) {
+      await tx.insert(credentials).values(batch);
     }
     for (const batch of chunk(fixture.releases, 500)) {
       await tx.insert(releases).values(batch);
@@ -50,6 +86,7 @@ async function seedDatabase(db: Database): Promise<{ fixture: Fixture; summary: 
       transitions: fixture.transitions.length,
       comments: fixture.comments.length,
       auditLog: fixture.auditLog.length,
+      credentials: credentialRows.length,
     },
   };
 }

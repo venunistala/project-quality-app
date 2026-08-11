@@ -31,6 +31,11 @@ Read-only. `GET /health`, `GET /releases` (filterable/sortable/paginated), `GET 
 
 Seeded users follow a predictable email pattern so tests can reference them by name: `engineer1..6@quality-lab.dev`, `approver1..4@quality-lab.dev`, `admin1..2@quality-lab.dev`.
 
+Every seeded user shares one **dev-only** password: `quality-lab-dev-password` (see
+`apps/api/src/db/seed/fixtures.ts`'s `SEED_USER_PASSWORD`). It's intentionally public, not a
+secret — seeding refuses to run at all when `NODE_ENV=production` (`assertNotProduction` in
+`apps/api/src/db/seed/run-seed.ts`), so this password can never end up protecting a real account.
+
 ## Architecture
 
 ```

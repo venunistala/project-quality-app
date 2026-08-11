@@ -1,3 +1,10 @@
+// Every seeded user shares this password - it's intentionally public
+// (documented in the README), not a secret, so it's a plain constant rather
+// than an env var. Seeding refuses to run at all when NODE_ENV=production
+// (see assertNotProduction in run-seed.ts) specifically so this can never
+// end up protecting a real account.
+export const SEED_USER_PASSWORD = 'quality-lab-dev-password';
+
 export const USER_NAMES = [
   'Ava Chen',
   'Liam Patel',
