@@ -36,7 +36,7 @@ describe('migrations', () => {
     );
     expect(rows.map((row) => row.column_name)).toEqual([
       'id',
-      'version',
+      'release_label',
       'title',
       'description',
       'service_name',
@@ -44,6 +44,10 @@ describe('migrations', () => {
       'created_by',
       'created_at',
       'updated_at',
+      // Renamed columns keep their ordinal position; ADD COLUMN appends -
+      // this `version` is the optimistic-lock counter added in migration
+      // 0001, not the original (now release_label) business identifier.
+      'version',
     ]);
   });
 
@@ -94,7 +98,7 @@ describe('migrations', () => {
     expect(names).toEqual(
       expect.arrayContaining([
         'users_email_key',
-        'releases_version_key',
+        'releases_release_label_key',
         'releases_status_idx',
         'releases_created_by_idx',
         'releases_created_at_idx',

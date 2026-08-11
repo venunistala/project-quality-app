@@ -89,6 +89,7 @@ Non-obvious architectural decisions are recorded as ADRs in [`docs/adr`](docs/ad
 - [0003 — Status/role representation: text + CHECK vs native pgEnum](docs/adr/0003-status-role-representation.md)
 - [0004 — Denormalized release status alongside the transitions log](docs/adr/0004-denormalized-release-status.md)
 - [0005 — Postgres driver: postgres.js over pg](docs/adr/0005-postgres-driver.md)
+- [0006 — Optimistic-locking version column, added ahead of its use](docs/adr/0006-optimistic-locking-version-column.md)
 
 ## Project rules
 

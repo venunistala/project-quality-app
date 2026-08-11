@@ -36,7 +36,7 @@ describe('constraints', () => {
   async function insertRelease(createdBy: string) {
     const [release] = await db
       .insert(releases)
-      .values({ version: `v-${randomUUID()}`, title: 'Constraint test release', serviceName: 'svc', createdBy })
+      .values({ releaseLabel: `v-${randomUUID()}`, title: 'Constraint test release', serviceName: 'svc', createdBy })
       .returning();
     if (!release) {
       throw new Error('insert did not return a row');
@@ -54,13 +54,13 @@ describe('constraints', () => {
       ).rejects.toMatchObject({ code: UNIQUE_VIOLATION });
     });
 
-    it('rejects a duplicate release version', async () => {
+    it('rejects a duplicate release_label', async () => {
       const creator = await insertUser();
-      const version = `dup-${randomUUID()}`;
-      await db.insert(releases).values({ version, title: 'A', serviceName: 'svc', createdBy: creator.id });
+      const releaseLabel = `dup-${randomUUID()}`;
+      await db.insert(releases).values({ releaseLabel, title: 'A', serviceName: 'svc', createdBy: creator.id });
 
       await expect(
-        db.insert(releases).values({ version, title: 'B', serviceName: 'svc', createdBy: creator.id }),
+        db.insert(releases).values({ releaseLabel, title: 'B', serviceName: 'svc', createdBy: creator.id }),
       ).rejects.toMatchObject({ code: UNIQUE_VIOLATION });
     });
   });
@@ -70,7 +70,7 @@ describe('constraints', () => {
       await expect(
         db
           .insert(releases)
-          .values({ version: `v-${randomUUID()}`, title: 'A', serviceName: 'svc', createdBy: randomUUID() }),
+          .values({ releaseLabel: `v-${randomUUID()}`, title: 'A', serviceName: 'svc', createdBy: randomUUID() }),
       ).rejects.toMatchObject({ code: FOREIGN_KEY_VIOLATION });
     });
 
@@ -135,7 +135,7 @@ describe('constraints', () => {
 
       await expect(
         db.execute(
-          sql`insert into releases (version, title, service_name, status, created_by)
+          sql`insert into releases (release_label, title, service_name, status, created_by)
               values (${`v-${randomUUID()}`}, 'A', 'svc', 'not-a-real-status', ${creator.id})`,
         ),
       ).rejects.toMatchObject({ code: CHECK_VIOLATION });

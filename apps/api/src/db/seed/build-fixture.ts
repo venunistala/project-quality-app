@@ -320,12 +320,12 @@ export function buildFixture(): Fixture {
 
   const statuses = buildStatusSlots(rng);
 
-  const versionCounters = new Map<string, { major: number; minor: number }>();
-  function nextVersion(serviceName: string): string {
-    const current = versionCounters.get(serviceName) ?? { major: 1, minor: 0 };
+  const releaseLabelCounters = new Map<string, { major: number; minor: number }>();
+  function nextReleaseLabel(serviceName: string): string {
+    const current = releaseLabelCounters.get(serviceName) ?? { major: 1, minor: 0 };
     const label = `${serviceName}@v${current.major}.${current.minor}.0`;
     const next = current.minor >= 9 ? { major: current.major + 1, minor: 0 } : { major: current.major, minor: current.minor + 1 };
-    versionCounters.set(serviceName, next);
+    releaseLabelCounters.set(serviceName, next);
     return label;
   }
 
@@ -387,7 +387,7 @@ export function buildFixture(): Fixture {
 
     releaseRows.push({
       id: releaseId,
-      version: nextVersion(serviceName),
+      releaseLabel: nextReleaseLabel(serviceName),
       title,
       description,
       serviceName,
