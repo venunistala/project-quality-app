@@ -22,3 +22,17 @@ export async function countByReleaseId(db: Database, releaseId: string): Promise
     .where(eq(comments.releaseId, releaseId));
   return row?.value ?? 0;
 }
+
+export interface InsertCommentRow {
+  releaseId: string;
+  authorId: string;
+  body: string;
+}
+
+export async function insert(db: Database, row: InsertCommentRow) {
+  const [inserted] = await db.insert(comments).values(row).returning();
+  if (!inserted) {
+    throw new Error('insert into comments returned no row');
+  }
+  return inserted;
+}

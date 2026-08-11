@@ -93,3 +93,71 @@ export async function existsById(db: Database, id: string): Promise<boolean> {
   const [row] = await db.select({ id: releases.id }).from(releases).where(eq(releases.id, id)).limit(1);
   return row !== undefined;
 }
+
+export interface InsertReleaseRow {
+  releaseLabel: string;
+  title: string;
+  description: string | null;
+  serviceName: string;
+  createdBy: string;
+}
+
+export async function insert(db: Database, row: InsertReleaseRow) {
+  const [inserted] = await db.insert(releases).values(row).returning();
+  if (!inserted) {
+    throw new Error('insert into releases returned no row');
+  }
+  return inserted;
+}
+
+export async function findCurrentVersion(db: Database, id: string): Promise<number | undefined> {
+  const [row] = await db.select({ version: releases.version }).from(releases).where(eq(releases.id, id));
+  return row?.version;
+}
+
+export interface ConditionalStatusUpdate {
+  id: string;
+  expectedVersion: number;
+  toStatus: ReleaseStatus;
+}
+
+/**
+ * `WHERE id = ? AND version = ?` with `SET version = version + 1` - the
+ * optimistic-lock check and the mutation are the same statement, so there's
+ * no window between "check" and "write" for another transaction to land in.
+ * Zero rows returned means the version didn't match (stale) - see
+ * docs/adr/0013-optimistic-locking.md.
+ */
+export async function conditionalUpdateStatus(db: Database, params: ConditionalStatusUpdate) {
+  const [row] = await db
+    .update(releases)
+    .set({ status: params.toStatus, version: sql`${releases.version} + 1`, updatedAt: new Date() })
+    .where(and(eq(releases.id, params.id), eq(releases.version, params.expectedVersion)))
+    .returning();
+  return row;
+}
+
+export interface ConditionalPatchUpdate {
+  id: string;
+  expectedVersion: number;
+  title?: string;
+  description?: string | null;
+  serviceName?: string;
+}
+
+/** Same conditional-update shape as conditionalUpdateStatus, over the draft-editable fields instead of status. */
+export async function conditionalUpdatePatchFields(db: Database, params: ConditionalPatchUpdate) {
+  const { id, expectedVersion, title, description, serviceName } = params;
+  const [row] = await db
+    .update(releases)
+    .set({
+      ...(title !== undefined ? { title } : {}),
+      ...(description !== undefined ? { description } : {}),
+      ...(serviceName !== undefined ? { serviceName } : {}),
+      version: sql`${releases.version} + 1`,
+      updatedAt: new Date(),
+    })
+    .where(and(eq(releases.id, id), eq(releases.version, expectedVersion)))
+    .returning();
+  return row;
+}

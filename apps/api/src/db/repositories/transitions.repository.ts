@@ -1,3 +1,4 @@
+import type { ReleaseStatus } from '@quality-lab/shared';
 import { asc, eq } from 'drizzle-orm';
 import type { Database } from '../client.js';
 import { transitions } from '../schema/index.js';
@@ -10,4 +11,16 @@ export async function findByReleaseId(db: Database, releaseId: string) {
     with: { actor: { columns: ACTOR_COLUMNS } },
     orderBy: asc(transitions.createdAt),
   });
+}
+
+export interface InsertTransitionRow {
+  releaseId: string;
+  fromStatus: ReleaseStatus | null;
+  toStatus: ReleaseStatus;
+  actorId: string;
+  reason: string | null;
+}
+
+export async function insert(db: Database, row: InsertTransitionRow): Promise<void> {
+  await db.insert(transitions).values(row);
 }
