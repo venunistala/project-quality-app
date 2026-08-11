@@ -38,6 +38,22 @@ export function registerErrorHandling(app: FastifyInstance, isProduction: boolea
       return;
     }
 
+    // Fastify's own schema-validation lifecycle (fastify-type-provider-zod's
+    // validatorCompiler, used for route querystring/params validation)
+    // rejects with a native FastifyError carrying `.validation`, not a
+    // ZodError instance - normalized here to the same VALIDATION_ERROR code
+    // so the envelope is consistent regardless of which path produced it.
+    if (error.validation) {
+      reply.code(400).send(
+        toEnvelope({
+          code: 'VALIDATION_ERROR',
+          message: error.message,
+          requestId: request.id,
+        }),
+      );
+      return;
+    }
+
     const statusCode = error.statusCode ?? 500;
     const isClientError = statusCode >= 400 && statusCode < 500;
 

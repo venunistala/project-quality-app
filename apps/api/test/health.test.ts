@@ -21,7 +21,7 @@ describe('GET /health', () => {
     await app.close();
   });
 
-  it('echoes an inbound x-request-id header into the response logger context', async () => {
+  it('echoes an inbound x-request-id back as a response header', async () => {
     const app = buildApp({ config: testConfig });
 
     const response = await app.inject({
@@ -31,6 +31,18 @@ describe('GET /health', () => {
     });
 
     expect(response.statusCode).toBe(200);
+    expect(response.headers['x-request-id']).toBe('test-request-id-123');
+
+    await app.close();
+  });
+
+  it('generates and returns an x-request-id when none is sent', async () => {
+    const app = buildApp({ config: testConfig });
+
+    const response = await app.inject({ method: 'GET', url: '/health' });
+
+    expect(response.statusCode).toBe(200);
+    expect(typeof response.headers['x-request-id']).toBe('string');
 
     await app.close();
   });

@@ -7,6 +7,8 @@ import { registerDbPlugin } from './plugins/db.js';
 import { registerErrorHandling } from './plugins/error-handler.js';
 import { buildLoggerOptions } from './plugins/logger.js';
 import { registerHealthRoute } from './routes/health.js';
+import { registerReleaseRoutes } from './routes/releases.routes.js';
+import { registerUserRoutes } from './routes/users.routes.js';
 
 export interface BuildAppOptions {
   config: Config;
@@ -33,11 +35,26 @@ export function buildApp({ config, db }: BuildAppOptions): FastifyInstance {
   app.setValidatorCompiler(validatorCompiler);
   app.setSerializerCompiler(serializerCompiler);
 
+  // requestIdHeader only controls which INBOUND header Fastify reads a
+  // request id from - it does not echo one back as a response header on
+  // its own, so that has to be set explicitly here for every response to
+  // actually carry the correlation id.
+  app.addHook('onSend', async (request, reply, payload) => {
+    reply.header('x-request-id', request.id);
+    // Read-only, seeded/effectively-static data in this phase, but never
+    // baking in a positive TTL that would need revisiting the moment writes
+    // exist - see docs/adr/0008-no-http-caching.md.
+    reply.header('cache-control', 'no-store');
+    return payload;
+  });
+
   registerErrorHandling(app, config.NODE_ENV === 'production');
   registerHealthRoute(app);
 
   if (db) {
     registerDbPlugin(app, db);
+    registerReleaseRoutes(app);
+    registerUserRoutes(app);
   }
 
   return app;
