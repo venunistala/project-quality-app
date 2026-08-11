@@ -1,4 +1,4 @@
-import { RELEASE_STATUSES } from '@quality-lab/shared';
+import { RELEASE_STATUSES, type ReleaseStatus } from '@quality-lab/shared';
 import { sql } from 'drizzle-orm';
 import { check, index, pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core';
 import { releases } from './releases.js';
@@ -14,8 +14,8 @@ export const transitions = pgTable(
       .notNull()
       .references(() => releases.id, { onDelete: 'cascade' }),
     // null marks the creation event (the release's first row in this table)
-    fromStatus: text('from_status'),
-    toStatus: text('to_status').notNull(),
+    fromStatus: text('from_status').$type<ReleaseStatus>(),
+    toStatus: text('to_status').$type<ReleaseStatus>().notNull(),
     actorId: uuid('actor_id')
       .notNull()
       .references(() => users.id, { onDelete: 'restrict' }),
