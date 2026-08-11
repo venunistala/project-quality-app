@@ -6,6 +6,7 @@ const testConfig: Config = {
   NODE_ENV: 'test',
   PORT: 0,
   LOG_LEVEL: 'error',
+  DATABASE_URL: 'postgresql://quality_lab:quality_lab@localhost:5432/quality_lab_test',
 };
 
 describe('GET /health', () => {

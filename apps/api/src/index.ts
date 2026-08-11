@@ -1,4 +1,10 @@
-import 'dotenv/config';
+import { resolve } from 'node:path';
+import { config as loadDotenv } from 'dotenv';
+// pnpm/turbo run package scripts with the package dir as cwd, but the repo
+// keeps a single .env at the repo root (alongside docker-compose.yml) -
+// dotenv/config's cwd-relative default would never find it.
+loadDotenv({ path: resolve(process.cwd(), '../../.env') });
+
 import { buildApp } from './app.js';
 import { loadConfig, type Config } from './config.js';
 

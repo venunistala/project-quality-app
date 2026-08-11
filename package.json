@@ -11,8 +11,13 @@
     "lint": "turbo run lint",
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",
+    "test:integration": "turbo run test:integration",
     "db:up": "docker compose up -d postgres",
-    "db:down": "docker compose down"
+    "db:down": "docker compose down",
+    "db:generate": "pnpm --filter @quality-lab/api db:generate",
+    "db:migrate": "pnpm --filter @quality-lab/api db:migrate",
+    "db:reset": "pnpm --filter @quality-lab/api db:reset",
+    "db:seed": "pnpm --filter @quality-lab/api db:seed"
   },
   "devDependencies": {
     "@eslint/js": "^9.19.0",
