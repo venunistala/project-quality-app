@@ -1,6 +1,6 @@
 # quality-lab
 
-A release-approval tracker built as a testing and developer-tooling substrate — it exists to be tested, instrumented, and automated against, not to be shipped as a product feature-first. Phase 0 was a monorepo skeleton with no product features. **Phase 1 adds the data layer**: a real Postgres schema with checked-in migrations and a deterministic seed script — still no HTTP endpoints or UI.
+A release-approval tracker built as a testing and developer-tooling substrate — it exists to be tested, instrumented, and automated against, not to be shipped as a product feature-first. Phase 0 was a monorepo skeleton with no product features. Phase 1 added the data layer: a real Postgres schema with checked-in migrations and a deterministic seed script. **Phase 2 adds a read-only HTTP API** over that data — four GET endpoints, OpenAPI docs at `/docs`, still no writes, auth, or UI.
 
 ## Prerequisites
 
@@ -19,7 +19,11 @@ pnpm db:seed
 pnpm dev
 ```
 
-That starts the API at `http://localhost:3001` (`GET /health`) and the web app at `http://localhost:3000`, backed by a Postgres database seeded with ~200 releases spanning six months of history. `.env` is gitignored; `.env.example` documents every variable, including the single `DATABASE_URL` the API/drizzle-kit/seed scripts read (kept in sync by hand with the discrete `POSTGRES_*` vars docker-compose uses).
+That starts the API at `http://localhost:3001` and the web app at `http://localhost:3000`, backed by a Postgres database seeded with ~200 releases spanning six months of history. `.env` is gitignored; `.env.example` documents every variable, including the single `DATABASE_URL` the API/drizzle-kit/seed scripts read (kept in sync by hand with the discrete `POSTGRES_*` vars docker-compose uses).
+
+## API
+
+Read-only. `GET /health`, `GET /releases` (filterable/sortable/paginated), `GET /releases/:id` (with full transition history), `GET /releases/:id/comments` (paginated), `GET /users/:id`. Full interactive docs — generated from the same Zod schemas used to validate requests — at `http://localhost:3001/docs`. Email is never returned by any endpoint. Every response carries `x-request-id` (echoed if you send one, generated otherwise) and `Cache-Control: no-store` (see [ADR 0008](docs/adr/0008-no-http-caching.md)).
 
 ## Seed data
 
@@ -30,39 +34,41 @@ Seeded users follow a predictable email pattern so tests can reference them by n
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                          quality-lab                          │
-│                                                                 │
-│   ┌────────────────┐          ┌────────────────────────┐      │
-│   │   apps/web      │          │      apps/api           │     │
-│   │   Next.js       │  ─(future)─▶  Fastify               │     │
-│   │   Tailwind      │   HTTP    │   route → service       │     │
-│   │   shadcn/ui     │          │   → repository (layered)│     │
-│   └────────────────┘          └───────────┬──────────────┘     │
-│                                            │                    │
-│                                            ▼                    │
-│                                  ┌────────────────────┐        │
-│                                  │   Postgres 16        │        │
-│                                  │   (docker-compose)    │        │
-│                                  │   users, releases,    │        │
-│                                  │   transitions,        │        │
-│                                  │   comments, audit_log │        │
-│                                  └────────────────────┘        │
-│                                                                 │
-│   ┌──────────────────────────────────────────────────────┐    │
-│   │  packages/shared — Zod schemas, the release state       │    │
-│   │  machine (canTransition), and types imported by both    │    │
-│   │  apps via the pnpm workspace protocol                   │    │
-│   └──────────────────────────────────────────────────────┘    │
-│                                                                 │
-│   Orchestrated by pnpm workspaces + Turborepo. CI runs          │
-│   lint → typecheck → test → build, plus a separate              │
-│   integration job (migrate → test:integration) against a        │
-│   Postgres service container.                                   │
-└─────────────────────────────────────────────────────────────┘
+┌───────────────────────────────────────────────────────────────────┐
+│                              quality-lab                             │
+│                                                                       │
+│   ┌────────────────┐            ┌──────────────────────────────┐    │
+│   │   apps/web      │            │        apps/api                │  │
+│   │   Next.js       │ ─(future)─▶│  Fastify: route → service      │  │
+│   │   Tailwind      │    HTTP    │  → repository (layered)        │  │
+│   │   shadcn/ui     │            │  GET /releases, /:id,           │  │
+│   └────────────────┘            │  /:id/comments, /users/:id,     │  │
+│                                  │  OpenAPI docs at /docs          │  │
+│                                  └──────────────┬───────────────┘  │
+│                                                  │                   │
+│                                                  ▼                   │
+│                                        ┌────────────────────┐       │
+│                                        │   Postgres 16        │      │
+│                                        │   (docker-compose)    │     │
+│                                        │   users, releases,    │     │
+│                                        │   transitions,        │     │
+│                                        │   comments, audit_log │     │
+│                                        └────────────────────┘       │
+│                                                                       │
+│   ┌───────────────────────────────────────────────────────────┐    │
+│   │  packages/shared — Zod schemas (domain + HTTP request/       │  │
+│   │  response), the release state machine (canTransition), and   │  │
+│   │  types imported by both apps via the pnpm workspace protocol │  │
+│   └───────────────────────────────────────────────────────────┘    │
+│                                                                       │
+│   Orchestrated by pnpm workspaces + Turborepo. CI runs                │
+│   lint → typecheck → test → build, plus a separate                    │
+│   integration job (migrate → test:integration) against a              │
+│   Postgres service container.                                         │
+└───────────────────────────────────────────────────────────────────┘
 ```
 
-`apps/api` doesn't yet have a route or service layer reading from Postgres — Phase 1 is schema, migrations, and seed data only. The `db → repository` wiring above describes what Phase 2+ will build on.
+`apps/web` still has no HTTP client wired to `apps/api` — that's future scope. Everything under `apps/api` above (routes, services, repositories) is real as of Phase 2.
 
 ## Scripts (run from repo root, via Turborepo/pnpm)
 
@@ -90,6 +96,8 @@ Non-obvious architectural decisions are recorded as ADRs in [`docs/adr`](docs/ad
 - [0004 — Denormalized release status alongside the transitions log](docs/adr/0004-denormalized-release-status.md)
 - [0005 — Postgres driver: postgres.js over pg](docs/adr/0005-postgres-driver.md)
 - [0006 — Optimistic-locking version column, added ahead of its use](docs/adr/0006-optimistic-locking-version-column.md)
+- [0007 — Pagination limit clamps instead of rejecting](docs/adr/0007-pagination-limit-clamp.md)
+- [0008 — No HTTP caching (Cache-Control: no-store)](docs/adr/0008-no-http-caching.md)
 
 ## Project rules
 
