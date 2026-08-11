@@ -7,6 +7,7 @@ loadDotenv({ path: resolve(process.cwd(), '../../.env') });
 
 import { buildApp } from './app.js';
 import { loadConfig, type Config } from './config.js';
+import { createDbClient } from './db/client.js';
 
 let config: Config;
 try {
@@ -16,12 +17,14 @@ try {
   process.exit(1);
 }
 
-const app = buildApp({ config });
+const { client, db } = createDbClient(config.DATABASE_URL);
+const app = buildApp({ config, db });
 
 async function shutdown(signal: string): Promise<void> {
   app.log.info({ signal }, 'shutting down');
   try {
     await app.close();
+    await client.end();
     process.exit(0);
   } catch (err) {
     app.log.error({ err }, 'error during shutdown');
