@@ -1,6 +1,6 @@
 # quality-lab
 
-A release-approval tracker built as a testing and developer-tooling substrate — it exists to be tested, instrumented, and automated against, not to be shipped as a product feature-first. Phase 0 was a monorepo skeleton with no product features. Phase 1 added the data layer: a real Postgres schema with checked-in migrations and a deterministic seed script. **Phase 2 adds a read-only HTTP API** over that data — four GET endpoints, OpenAPI docs at `/docs`, still no writes, auth, or UI.
+A release-approval tracker built as a testing and developer-tooling substrate — it exists to be tested, instrumented, and automated against, not to be shipped as a product feature-first. Phase 0 was a monorepo skeleton with no product features. Phase 1 added the data layer: a real Postgres schema with checked-in migrations and a deterministic seed script. Phase 2 added a read-only HTTP API over that data — four GET endpoints, OpenAPI docs at `/docs`, no writes/auth/UI yet. **Phase 3 adds the write side**: session-based auth, service-layer authorization built on the shared state machine, optimistic locking, idempotency keys, and four write endpoints, each one transactional write. Still no UI.
 
 ## Prerequisites
 
@@ -23,7 +23,13 @@ That starts the API at `http://localhost:3001` and the web app at `http://localh
 
 ## API
 
-Read-only. `GET /health`, `GET /releases` (filterable/sortable/paginated), `GET /releases/:id` (with full transition history), `GET /releases/:id/comments` (paginated), `GET /users/:id`. Full interactive docs — generated from the same Zod schemas used to validate requests — at `http://localhost:3001/docs`. Email is never returned by any endpoint. Every response carries `x-request-id` (echoed if you send one, generated otherwise) and `Cache-Control: no-store` (see [ADR 0008](docs/adr/0008-no-http-caching.md)).
+**Reads** (public, no auth required): `GET /health`, `GET /releases` (filterable/sortable/paginated), `GET /releases/:id` (with full transition history and `version`), `GET /releases/:id/comments` (paginated), `GET /users/:id`. Email is never returned by any of these.
+
+**Auth**: `POST /auth/login` `{ email, password }` sets an httpOnly session cookie (generic `401 INVALID_CREDENTIALS` on any failure — never reveals whether the email exists); `POST /auth/logout` invalidates it; `GET /auth/me` returns the current user, including email (the one endpoint that does — it's self-data). See [ADR 0009](docs/adr/0009-session-based-auth.md) / [ADR 0010](docs/adr/0010-argon2id-parameters.md).
+
+**Writes** (require a session cookie): `POST /releases` (creates in `draft`), `PATCH /releases/:id` (title/description/serviceName, draft-only, creator-only), `POST /releases/:id/transitions` `{ to, reason?, expectedVersion }` (authorization via the shared `canTransition()`, optimistic-locked), `POST /releases/:id/comments` (any authenticated user, any state). `POST /releases` and the transitions endpoint accept an optional `Idempotency-Key` header. Failures map to status codes per [ADR 0012](docs/adr/0012-403-vs-409.md): 401 unauthenticated, 403 forbidden, 409 illegal-transition/not-draft/stale-version, 400 validation. No `DELETE` — see [ADR 0015](docs/adr/0015-no-hard-delete.md).
+
+Full interactive docs — generated from the same Zod schemas used to validate requests — at `http://localhost:3001/docs`. Every response carries `x-request-id` (echoed if you send one, generated otherwise) and `Cache-Control: no-store` (see [ADR 0008](docs/adr/0008-no-http-caching.md)).
 
 ## Seed data
 
@@ -46,8 +52,9 @@ secret — seeding refuses to run at all when `NODE_ENV=production` (`assertNotP
 │   │   apps/web      │            │        apps/api                │  │
 │   │   Next.js       │ ─(future)─▶│  Fastify: route → service      │  │
 │   │   Tailwind      │    HTTP    │  → repository (layered)        │  │
-│   │   shadcn/ui     │            │  GET /releases, /:id,           │  │
-│   └────────────────┘            │  /:id/comments, /users/:id,     │  │
+│   │   shadcn/ui     │            │  GET reads (public) +           │  │
+│   └────────────────┘            │  auth + write endpoints         │  │
+│                                  │  (session cookie required),     │  │
 │                                  │  OpenAPI docs at /docs          │  │
 │                                  └──────────────┬───────────────┘  │
 │                                                  │                   │
@@ -55,9 +62,12 @@ secret — seeding refuses to run at all when `NODE_ENV=production` (`assertNotP
 │                                        ┌────────────────────┐       │
 │                                        │   Postgres 16        │      │
 │                                        │   (docker-compose)    │     │
-│                                        │   users, releases,    │     │
-│                                        │   transitions,        │     │
-│                                        │   comments, audit_log │     │
+│                                        │   users, credentials,  │    │
+│                                        │   sessions, releases,  │    │
+│                                        │   transitions,          │   │
+│                                        │   comments, audit_log,  │   │
+│                                        │   idempotency_keys,     │   │
+│                                        │   job_queue             │   │
 │                                        └────────────────────┘       │
 │                                                                       │
 │   ┌───────────────────────────────────────────────────────────┐    │
@@ -73,7 +83,7 @@ secret — seeding refuses to run at all when `NODE_ENV=production` (`assertNotP
 └───────────────────────────────────────────────────────────────────┘
 ```
 
-`apps/web` still has no HTTP client wired to `apps/api` — that's future scope. Everything under `apps/api` above (routes, services, repositories) is real as of Phase 2.
+`apps/web` still has no HTTP client wired to `apps/api` — that's future scope, no UI work has happened yet. Everything under `apps/api` above (routes, services, repositories) is real as of Phase 3.
 
 ## Scripts (run from repo root, via Turborepo/pnpm)
 
@@ -103,6 +113,14 @@ Non-obvious architectural decisions are recorded as ADRs in [`docs/adr`](docs/ad
 - [0006 — Optimistic-locking version column, added ahead of its use](docs/adr/0006-optimistic-locking-version-column.md)
 - [0007 — Pagination limit clamps instead of rejecting](docs/adr/0007-pagination-limit-clamp.md)
 - [0008 — No HTTP caching (Cache-Control: no-store)](docs/adr/0008-no-http-caching.md)
+- [0009 — Session-based auth (Postgres sessions, hashed cookie token)](docs/adr/0009-session-based-auth.md)
+- [0010 — Argon2id password hashing parameters](docs/adr/0010-argon2id-parameters.md)
+- [0011 — Authorization enforced in the service layer, not middleware](docs/adr/0011-authorization-in-service-layer.md)
+- [0012 — 403 (forbidden) vs 409 (conflict)](docs/adr/0012-403-vs-409.md)
+- [0013 — Optimistic locking vs SELECT ... FOR UPDATE](docs/adr/0013-optimistic-locking.md)
+- [0014 — Idempotency keys vs optimistic locking](docs/adr/0014-idempotency-vs-optimistic-locking.md)
+- [0015 — No hard delete on releases](docs/adr/0015-no-hard-delete.md)
+- [0016 — Side effects enqueued after commit, not inside the transaction](docs/adr/0016-side-effects-after-commit.md)
 
 ## Project rules
 
